@@ -40,25 +40,53 @@
             background-color: transparent;
         }
 
-        h3 {
-            margin-top: 0px;
+        .header {
+            min-width: 100%;
+            font-size: 38px;
             font-family: "Fredoka One";
             text-align: center;
             font-style: bold;
         }
 
         .gold {
-            color: gold
+            color: #ffd700;
         }
 
         ul {
             list-style: none;
             padding-left: 0px;
+            margin: 0px;
         }
 
         #top_donation {
-            font-weight: bold;
-            font-size: 48px;
+            font-size: 32px;
+        }
+
+        #progress {
+            position: relative;
+            height: 360px;
+            margin-top: 20px;
+            padding-top: 80px;
+        }
+
+        #current {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            min-width: 100%;
+            font-family: "Arial";
+        }
+
+        #goal {
+            font-family: "Arial";
+        }
+
+        .up-arrow {
+            width: 0;
+            height: 0;
+            border-style: solid;
+            border-width: 0 180px 50px 180px;
+            border-color: transparent transparent #007bff transparent;
         }
     </style>
 </head>
@@ -68,15 +96,25 @@
         <img src="el.png" width=450/>
     </div>
     <div id=main>
-        <h3>
+        <div class="header">
             <span class="gold">&#x2605&#x2605&#x2605</span> Top Donation
             <span class="gold">&#x2605&#x2605&#x2605</span>
-        </h3>
+            <br/>
+        </div>
         <div>
             <ul>
                 <li id="top_donation"></li>
             </ul>
         </div>
+        <div id="progress">
+            <div class="header">Goal:
+                <span id="goal"></span>
+            </div>
+            <div id="inner_progress">
+            </div>
+
+        </div>
+
     </div>
     <div class="round-bottom end-white">
         <center>
@@ -85,9 +123,32 @@
     </div>
 </body>
 <script src="fetch.umd.js"></script>
+<script src="progressbar.min.js"></script>
 <script>
     const teamId = window.location.hash.slice(1, window.location.hash.length);
     const teamDonationsUrl = `https://extralife.donordrive.com/api/teams/${teamId}/donations`;
+    const teamUrl = `https://extralife.donordrive.com/api/teams/${teamId}`;
+
+
+    const formatter = new Intl.NumberFormat('en-US', {
+        style: 'currency',
+        currency: 'USD',
+        minimumFractionDigits: 2
+    });
+
+    const bar = new ProgressBar.SemiCircle(document.getElementById('inner_progress'), {
+        strokeWidth: 6,
+        color: '#FFD700',
+        trailColor: '#eee',
+        trailWidth: 1,
+        easing: 'easeInOut',
+        duration: 1400,
+        svgStyle: null,
+        text: {
+            value: '',
+            alignToBottom: false
+        }
+    });
 
     function keysrt(key) {
         return function (a, b) {
@@ -97,24 +158,63 @@
         }
     }
 
-    WHATWGFetch.fetch(teamDonationsUrl, {
-        headers: {
-            "Content-Type": "application/json"
+    function handleResponse(response) {
+        if (!response.ok) {
+            throw Error(response.statusText);
         }
-    }).then(response => {
         return response.json();
-
-    }).then(data => {
-        const sorted = data.sort(keysrt('amount'))
-        const top = sorted[sorted.length - 1];
-        document.getElementById('top_donation').innerText = `$${top.amount}`;
-    });
-
-    function refresh() {
-        window.location.reload(true);
     }
 
-    setTimeout(refresh, 5000);
+    function setProgress(currentDonations, goalDonations) {
+        const maxHeight = 400;
+        const position = currentDonations / goalDonations;
+
+        const current = document.getElementById('current');
+        const goal = document.getElementById('goal');
+        goal.innerText = formatter.format(goalDonations);
+
+        bar.setText(formatter.format(currentDonations))
+        bar.animate(position)
+    }
+
+    function updateProgress() {
+        return WHATWGFetch.fetch(teamUrl, {
+            headers: {
+                "Content-Type": "application/json"
+            }
+        })
+            .then(handleResponse)
+            .then(data => {
+                console.log(data);
+                setProgress(data.sumDonations, data.fundraisingGoal);
+            });
+    }
+
+
+    function updateDonations() {
+
+        return WHATWGFetch.fetch(teamDonationsUrl, {
+            headers: {
+                "Content-Type": "application/json"
+            }
+        })
+            .then(handleResponse)
+            .then(data => {
+                const sorted = data.sort(keysrt('amount'))
+                const top = sorted[sorted.length - 1];
+                const amount = formatter.format(top.amount);
+
+                document.getElementById('top_donation').innerHTML = `<strong>${amount}</strong><br/>${top.displayName}`;
+            });
+    }
+
+    function updateAll() {
+        return Promise.all([updateDonations(), updateProgress()]);
+    }
+
+    updateAll().then(() => {
+        // setInterval(updateDonations, 5000);
+    });
 </script>
 
 </html>
